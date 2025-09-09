@@ -73,4 +73,8 @@ int main () {
     double triArea = tri->area();
     double quadArea = quad->area();
     std::cout << "area of tri is " << triArea << "." << std::endl <<"Area of quad is " << quadArea;
+
+    delete tri;
+    delete quad;
+    return 0;
 }
