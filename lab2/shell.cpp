@@ -2,7 +2,7 @@
 LE2: Introduction to Unnamed Pipes
 ****************/
 #include <unistd.h> // pipe, fork, dup2, execvp, close
-#include <sys/wait.h> // waitpid
+//#include <sys/wait.h> // waitpid
 using namespace std;
 
 int main () {
@@ -13,7 +13,7 @@ int main () {
 
     // TODO: add functionality
     // Create pipe
-    int pipefd[2], status; //pipefd[0] read end, [1] write end
+    int pipefd[2]; //pipefd[0] read end, [1] write end
     pipe(pipefd);
     // Create child to run first command
     // In child, redirect output to write end of pipe
@@ -40,5 +40,5 @@ int main () {
     }
 
     // Reset the input and output file descriptors of the parent.
-    waitpid(child2, &status, 0);
+    wait(NULL);
 }
