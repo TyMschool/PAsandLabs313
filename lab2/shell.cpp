@@ -2,7 +2,8 @@
 LE2: Introduction to Unnamed Pipes
 ****************/
 #include <unistd.h> // pipe, fork, dup2, execvp, close
-//#include <sys/wait.h> // waitpid
+#include <sys/wait.h> // waitpid
+#include <cstdio> // perror
 using namespace std;
 
 int main () {
@@ -14,7 +15,10 @@ int main () {
     // TODO: add functionality
     // Create pipe
     int pipefd[2]; //pipefd[0] read end, [1] write end
-    pipe(pipefd);
+    if(pipe(pipefd) == -1){
+        perror("pipe failed");
+        return 1;   
+    }
     // Create child to run first command
     // In child, redirect output to write end of pipe
     // Close the read end of the pipe on the child side.
@@ -22,9 +26,10 @@ int main () {
     pid_t child1 = fork();
     if(child1 == 0){
         dup2(pipefd[1] , 1); // makes 1 point to the same place as pipefd[1]
+        close(pipefd[0]);
         close(pipefd[1]);
         execvp(cmd1[0], cmd1);
-        //return 1;
+        return 1;
     }
 
     // Create another child to run second command
@@ -35,10 +40,16 @@ int main () {
     if(child2 == 0){
         dup2(pipefd[0], 0);
         close(pipefd[0]);
+        close(pipefd[1]);
         execvp(cmd2[0], cmd2);
-        //return 1;
+        return 1;
     }
 
+    close(pipefd[0]);
+    close(pipefd[1]);
     // Reset the input and output file descriptors of the parent.
     wait(NULL);
+    wait(NULL);
+
+    return 0;
 }
