@@ -2,7 +2,6 @@
 LE2: Introduction to Unnamed Pipes
 ****************/
 #include <unistd.h> // pipe, fork, dup2, execvp, close
-#include <sys/wait.h> // waitpid
 #include <cstdio> // perror
 using namespace std;
 
@@ -48,8 +47,6 @@ int main () {
     close(pipefd[0]);
     close(pipefd[1]);
     // Reset the input and output file descriptors of the parent.
-    wait(NULL);
-    wait(NULL);
 
     return 0;
 }
