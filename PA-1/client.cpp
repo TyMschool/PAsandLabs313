@@ -6,9 +6,9 @@
     Date: 2/8/20
 	
 	Please include your Name, UIN, and the date below
-	Name:
-	UIN:
-	Date:
+	Name: Ty Macaulau
+	UIN: 634006348
+	Date: 9/16/2025
 */
 #include "common.h"
 #include "FIFORequestChannel.h"
@@ -39,32 +39,48 @@ int main (int argc, char *argv[]) {
 				break;
 		}
 	}
+	pid_t pid = fork();
+	if(pid == -1){
+		//Failed :(
+		EXITONERROR("Fork failed");
+	}else if(pid == 0){
+		//in child process
+		//cout << "In child process. starting server" << endl;
 
-    FIFORequestChannel chan("control", FIFORequestChannel::CLIENT_SIDE);
-	
-	// example data point request
-    char buf[MAX_MESSAGE]; // 256
-    datamsg x(1, 0.0, 1);
-	
-	memcpy(buf, &x, sizeof(datamsg));
-	chan.cwrite(buf, sizeof(datamsg)); // question
-	double reply;
-	chan.cread(&reply, sizeof(double)); //answer
-	cout << "For person " << p << ", at time " << t << ", the value of ecg " << e << " is " << reply << endl;
-	
-    // sending a non-sense message, you need to change this
-	filemsg fm(0, 0);
-	string fname = "teslkansdlkjflasjdf.dat";
-	
-	int len = sizeof(filemsg) + (fname.size() + 1);
-	char* buf2 = new char[len];
-	memcpy(buf2, &fm, sizeof(filemsg));
-	strcpy(buf2 + sizeof(filemsg), fname.c_str());
-	chan.cwrite(buf2, len);  // I want the file length;
+		const char *args[] = {"./server", NULL};
+		execvp("./server", const_cast<char* const*>(args));
+	}else{
+		//Parent (client) process
+		//cout << "In parent process. Continueing client" << endl;
+		sleep(1);
+		
+		FIFORequestChannel chan("control", FIFORequestChannel::CLIENT_SIDE);
+		
+		
+		// example data point request
+		char buf[MAX_MESSAGE]; // 256
+		datamsg x(1, 0.0, 1);
+		
+		memcpy(buf, &x, sizeof(datamsg));
+		chan.cwrite(buf, sizeof(datamsg)); // question
+		double reply;
+		chan.cread(&reply, sizeof(double)); //answer
+		cout << "For person " << p << ", at time " << t << ", the value of ecg " << e << " is " << reply << endl;
+		
+		// sending a non-sense message, you need to change this
+		filemsg fm(0, 0);
+		string fname = "teslkansdlkjflasjdf.dat";
+		
+		int len = sizeof(filemsg) + (fname.size() + 1);
+		char* buf2 = new char[len];
+		memcpy(buf2, &fm, sizeof(filemsg));
+		strcpy(buf2 + sizeof(filemsg), fname.c_str());
+		chan.cwrite(buf2, len);  // I want the file length;
 
-	delete[] buf2;
-	
-	// closing the channel    
-    MESSAGE_TYPE m = QUIT_MSG;
-    chan.cwrite(&m, sizeof(MESSAGE_TYPE));
+		delete[] buf2;
+		
+		// closing the channel    
+		MESSAGE_TYPE m = QUIT_MSG;
+		chan.cwrite(&m, sizeof(MESSAGE_TYPE));
+	}
 }

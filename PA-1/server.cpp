@@ -165,6 +165,7 @@ void handle_process_loop (FIFORequestChannel *channel) {
 }
 
 int main (int argc, char *argv[]) {
+	//cout << "in server" << endl;
 	buffercapacity = MAX_MESSAGE;
 	int opt;
 	while ((opt = getopt(argc, argv, "m:")) != -1) {
