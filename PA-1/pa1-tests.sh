@@ -52,7 +52,7 @@ else
 fi
 echo -e "\nSCORE: ${SCORE}/85\n"
 
-Test 3
+# Test 3 IS THIS SUPPOSED TO BE COMMENTED OR NOT???
 dd if=/dev/zero of=test.bin bs=1024k count=10
 ./client -f test.bin
 if diff -qwB test.bin received/test.bin > /dev/null;then

@@ -12,19 +12,83 @@
 */
 #include "common.h"
 #include "FIFORequestChannel.h"
+#include <sys/wait.h>
 
 using namespace std;
 
+void requestFiles(FIFORequestChannel& chan, const string& filename, int buffer_capacity){
+	filemsg size_request(0, 0);  // offset=0, length=0 means "give me file size"
+    
+    // Build message: filemsg + filename
+    int len = sizeof(filemsg) + filename.size() + 1;
+    char* buf = new char[len];
+    memcpy(buf, &size_request, sizeof(filemsg));
+    strcpy(buf + sizeof(filemsg), filename.c_str());
+    
+    // Send request
+    chan.cwrite(buf, len);
+    
+    // Receive file size
+    __int64_t file_size;
+    chan.cread(&file_size, sizeof(__int64_t));
+    
+    cout << "File size: " << file_size << " bytes" << endl;
+    delete[] buf;
+    
+    if (file_size <= 0) {
+        cout << "File not found or empty" << endl;
+        return;
+    }
+
+	// Create output file
+    string output_path = "received/" + filename; 
+    ofstream outfile(output_path, ios::binary);
+    
+    __int64_t bytes_received = 0;
+    
+    while (bytes_received < file_size) {
+		__int64_t remaining = file_size - bytes_received;
+        int request_size = (remaining > buffer_capacity) ? buffer_capacity : (int)remaining;
+        
+        // Request this chunk
+        filemsg chunk_request(bytes_received, request_size);
+        
+        // Build and send message
+        len = sizeof(filemsg) + filename.size() + 1;
+        buf = new char[len];
+        memcpy(buf, &chunk_request, sizeof(filemsg));
+        strcpy(buf + sizeof(filemsg), filename.c_str());
+        chan.cwrite(buf, len);
+        
+        // Receive chunk data
+        char* response = new char[request_size];
+        int actual_bytes = chan.cread(response, request_size);
+        
+        // Write to file
+        outfile.write(response, actual_bytes);
+        bytes_received += actual_bytes;
+        
+        // Cleanup
+        delete[] buf;
+        delete[] response;
+    }
+    
+    outfile.close();
+	cout << "file saved to " << output_path << endl;
+}
 
 int main (int argc, char *argv[]) {
 	int opt;
 	int p = 1;
 	double t = 0.0;
 	int e = 1;
+	int buffer_capacity = MAX_MESSAGE;
 	bool one_point = false;
+	bool request_files = false;
+	bool new_channel = false;
 	
 	string filename = "";
-	while ((opt = getopt(argc, argv, "p:t:e:f:")) != -1) {
+	while ((opt = getopt(argc, argv, "p:t:e:f:m:c")) != -1) {
 		switch (opt) {
 			case 'p':
 				p = atoi (optarg);
@@ -38,6 +102,13 @@ int main (int argc, char *argv[]) {
 				break;
 			case 'f':
 				filename = optarg;
+				request_files = true;
+				break;
+			case 'm':
+				buffer_capacity = atoi(optarg);
+				break;
+			case 'c':
+				new_channel = true;
 				break;
 		}
 	}
@@ -45,9 +116,17 @@ int main (int argc, char *argv[]) {
 	if(pid == 0){
 		//in child process
 		//cout << "In child process. starting server" << endl;
-
-		const char *args[] = {"./server", NULL};
-		execvp("./server", const_cast<char* const*>(args));
+		if(buffer_capacity != MAX_MESSAGE){
+			string arg_buffer = to_string(buffer_capacity);
+			//execute server with the new buffer_capacity
+			const char *args[] = {"./server", "-m", arg_buffer.c_str(), NULL};
+			execvp("./server", const_cast<char* const*>(args));
+		} else {
+			//default capacity
+			const char *args[] = {"./server", NULL};
+			execvp("./server", const_cast<char* const*>(args));
+		}
+		
 	}else if(pid < 0){
 		//Failed :(
 		EXITONERROR("Fork failed");
@@ -57,22 +136,50 @@ int main (int argc, char *argv[]) {
 	sleep(1);
 	
 	FIFORequestChannel chan("control", FIFORequestChannel::CLIENT_SIDE);
+	FIFORequestChannel* active_channel = &chan;
+	vector<FIFORequestChannel*> cleanup;
+
+	if(new_channel){
+		
+		MESSAGE_TYPE msg = NEWCHANNEL_MSG;
+		chan.cwrite(&msg, sizeof(MESSAGE_TYPE));
+
+		char new_channel_name[30];
+		chan.cread(new_channel_name, sizeof(new_channel_name));
+
+		string channel_name = string (new_channel_name);
+		cout << "Server created new channel - " << channel_name << endl;
+
+		FIFORequestChannel* data_channel = new FIFORequestChannel(channel_name, FIFORequestChannel::CLIENT_SIDE);
+
+		cleanup.push_back(data_channel);
+		active_channel = data_channel;
+	}
 	
-	if(one_point){
+	if(request_files){
+		//./client -f x
+		//Mode 3: Requesting files
+		string copy_cmd = "cp " + filename + " BIMDC/ 2>/dev/null || true";
+    	system(copy_cmd.c_str());
+		
+		requestFiles(*active_channel, filename, buffer_capacity);
+
+	} else if(one_point){
 		//./client -p x -t y -e z
 		//Mode 1: single data point
 		datamsg request(p, t, e);
 
 		char buf[MAX_MESSAGE];
 		memcpy(buf, &request, sizeof(datamsg));
-		chan.cwrite(buf, sizeof(datamsg));
+		active_channel->cwrite(buf, sizeof(datamsg));
 		double reply;
-		chan.cread(&reply, sizeof(double));
+		active_channel->cread(&reply, sizeof(double));
 		cout << "For person " << p << ", at time " << t << ", the value of ecg " << e << " is " << reply << endl;
 	
-	}else{
+	} else {
+		//./client -p x
 		//Mode 2: first 1000 data points.
-		string filename = "received/x" + to_string(p) + ".csv";
+		string filename = "received/x" + to_string(p) + ".csv";   /// OR HERE?? x or no x?
 		ofstream outfile(filename);
 
 		for(int i = 0; i < 1000; i++){
@@ -82,16 +189,16 @@ int main (int argc, char *argv[]) {
 			datamsg request1(p, time, 1);
 			char buf[MAX_MESSAGE];
 			memcpy(buf, &request1, sizeof(datamsg));
-			chan.cwrite(buf, sizeof(datamsg));
+			active_channel->cwrite(buf, sizeof(datamsg));
 			double ecg1;
-			chan.cread(&ecg1, sizeof(double));	
+			active_channel->cread(&ecg1, sizeof(double));	
 
 			//ECG2
 			datamsg request2(p, time, 2);
 			memcpy(buf, &request2, sizeof(datamsg));
-			chan.cwrite(buf, sizeof(datamsg));
+			active_channel->cwrite(buf, sizeof(datamsg));
 			double ecg2;
-			chan.cread(&ecg2, sizeof(double));
+			active_channel->cread(&ecg2, sizeof(double));
 
 			outfile << time << ", " << ecg1 << ", " << ecg2 << endl;
 		}
@@ -99,36 +206,24 @@ int main (int argc, char *argv[]) {
 		cout << "Finished writing to " << filename << endl;
 	}
 	
-	// closing the channel    
-	MESSAGE_TYPE m = QUIT_MSG;
-	chan.cwrite(&m, sizeof(MESSAGE_TYPE));
+	// closing the channels  
+	for(FIFORequestChannel* channel : cleanup){
+		if(channel != nullptr){
+			cout << "closing channel - " << channel->name() << endl;
+			MESSAGE_TYPE quit = QUIT_MSG;
+			channel->cwrite(&quit, sizeof(MESSAGE_TYPE));
 
+			delete channel;
+			channel = nullptr;
+		}
+	}
 
+	MESSAGE_TYPE quit = QUIT_MSG;
+	chan.cwrite(&quit, sizeof(MESSAGE_TYPE));
 
+	int status;
+	wait(&status);
+	cout << "server gone: status " << status << endl;
 
-	/* example data point request
-	char buf[MAX_MESSAGE]; // 256
-	datamsg x(1, 0.0, 1);
-	
-	memcpy(buf, &x, sizeof(datamsg));
-	chan.cwrite(buf, sizeof(datamsg)); // question
-	double reply;
-	chan.cread(&reply, sizeof(double)); //answer
-	cout << "For person " << p << ", at time " << t << ", the value of ecg " << e << " is " << reply << endl;
-	
-	// sending a non-sense message, you need to change this
-	filemsg fm(0, 0);
-	string fname = "teslkansdlkjflasjdf.dat";
-	
-	int len = sizeof(filemsg) + (fname.size() + 1);
-	char* buf2 = new char[len];
-	memcpy(buf2, &fm, sizeof(filemsg));
-	strcpy(buf2 + sizeof(filemsg), fname.c_str());
-	chan.cwrite(buf2, len);  // I want the file length;
-
-	delete[] buf2;
-
-	//quit MSG
-*/
-	
+	return 0;
 }

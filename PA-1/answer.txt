@@ -1,0 +1,13 @@
+The main bottleneck is the tiny message size (256 bytes) and high per-request overhead.
+
+Effect: 100MB file requires ~450,000 requests, making transfers slow (~3.6 MB/s) despite larger file size improving efficiency slightly.
+The system’s architecture favors many tiny requests over bulk transfer, causing slow performance.
+
+File Size | Time (seconds)
+----------|---------------
+1KB:       0m1.102s
+10KB:       0m1.098s
+100KB:       0m1.129s    <---Lots of overhead. Takes about the same time as the 1KB!
+1MB:       0m1.460s
+10MB:       0m5.585s   <--- Constrained by the small chunk size making these slower
+100MB:       0m27.439s
