@@ -31,6 +31,7 @@ public:
     std::string out_file;
     // command arguments
     std::vector<std::string> args;
+    std::string separator;
 
     // constructor - takes command and calls internal convenience
     //               functions to parse the arguments

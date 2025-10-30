@@ -16,6 +16,7 @@
  */
 class Tokenizer {
 private:
+    std::vector<std::string> inner_strings; 
     // full user input stored for internal convenience
     std::string input;
     // flag for if an error occurs - error will be printed by Tokenizer
@@ -38,7 +39,7 @@ public:
 private:
     // convenience functions to trim whitespace and split input on "|"
     std::string trim (const std::string in);
-    void split (const std::string delim);
+    void split ();
 };
 
 #endif

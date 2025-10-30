@@ -7,6 +7,7 @@ Command::Command (const string _cmd, vector<string> _inner_strings) {
     bg = (cmd.substr(cmd.size()-1) == "&");
     in_file = "";
     out_file = "";
+    separator = "";
     findInOut();
     inner_strings = _inner_strings;
     parseArgs();
