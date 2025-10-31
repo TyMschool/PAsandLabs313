@@ -91,7 +91,7 @@ static void timerHandler( int sig, siginfo_t *si, void *uc )
 	completedSteps->push_back(comp_item->id);
 	completeCount++;
 	// Ready to remove that dependency, call the trigger for the appropriate handler
-	kill(getpid(), SIGUSR1);
+	raise(SIGUSR1);
 	/* End Section - 2 */
 }
 
@@ -142,16 +142,18 @@ int main(int argc, char **argv)
 		vector<Step*> readySteps = recipeSteps->GetReadySteps();
 		
 		for (Step* step : readySteps) {
-			if (!step->running) {
-				step->running = true;
-				cout << "Starting Step " << step->id << ": " << step->description 
-					<< " (" << step->duration << " minutes)" << endl;
-				makeTimer(step, step->duration * 60); // Convert minutes to seconds
-			}
+			step->running = true;
+			makeTimer(step, step->duration);
 		}
+		//cerr << "Complete: " << completeCount << "/" << recipeSteps->Count() << endl;
+
 		
-		sleep(1); // Brief pause to avoid busy waiting
+		if (completeCount < recipeSteps->Count()) {
+			pause();
+		}
 	}
+	delete completedSteps;
+	delete recipeSteps;
 	/* End Section - 1 */
 
 	cout << "Enjoy!" << endl;
