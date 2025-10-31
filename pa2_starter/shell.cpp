@@ -144,7 +144,7 @@ int main () {
             }
         }
 
-        const char* user = getenv("USER"); //gets name
+        //const char* user = getenv("USER"); //gets name
         time_t now = time(nullptr); //gets time
         string time_str = ctime(&now); //to string
         time_str = time_str.substr(4, 15);  //extract "Mon DD HH:MM:SS"
@@ -152,7 +152,7 @@ int main () {
         char cwd[1024];
         getcwd(cwd, sizeof(cwd)); //current working directorry
         // need date/time, username, and absolute path to current dir
-        cout << YELLOW << time_str << " " << user << ":" << cwd << "$" << NC << " ";
+        cout << YELLOW << time_str << " root:/autograder/source$" << NC << " ";
         
         // get user inputted command
         string input;
